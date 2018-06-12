@@ -60,7 +60,9 @@ PKG_CONFIG_DEPENDS := \
 	CONFIG_NGINX_NAXSI \
 	CONFIG_NGINX_LUA \
 	CONFIG_NGINX_HTTP_REAL_IP \
-	CONFIG_NGINX_HTTP_SECURE_LINK
+	CONFIG_NGINX_HTTP_SECURE_LINK \
+	CONFIG_NGINX_HTTP_BROTLI \
+	CONFIG_NGINX_HEADERS_MORE
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -208,6 +210,12 @@ endif
 ifeq ($(CONFIG_NGINX_HTTP_SECURE_LINK),y)
   ADDITIONAL_MODULES += --with-http_secure_link_module
 endif
+ifeq ($(CONFIG_NGINX_HEADERS_MORE),y)
+  ADDITIONAL_MODULES += --add-module=$(PKG_BUILD_DIR)/nginx-headers-more
+endif
+ifeq ($(CONFIG_NGINX_HTTP_BROTLI),y)
+  ADDITIONAL_MODULES += --add-module=$(PKG_BUILD_DIR)/nginx-brotli
+endif
 
 TARGET_CFLAGS += -fvisibility=hidden -ffunction-sections -fdata-sections -DNGX_LUA_NO_BY_LUA_BLOCK
 TARGET_LDFLAGS += -Wl,--gc-sections
@@ -254,6 +262,34 @@ define Build/Prepare
 	$(call Build/Prepare/Default)
 	$(if $(CONFIG_NGINX_NAXSI),$(call Prepare/nginx-naxsi))
 	$(if $(CONFIG_NGINX_LUA),$(call Prepare/lua-nginx))
+	$(if $(CONFIG_NGINX_HTTP_BROTLI),$(call Prepare/nginx-brotli))
+	$(if $(CONFIG_NGINX_HEADERS_MORE),$(call Prepare/nginx-headers-more))
+endef
+
+define Download/nginx-headers-more
+	VERSION:=a9f7c7e86cc7441d04e2f11f01c2e3a9c4b0301d
+	SUBDIR:=nginx-headers-more
+	FILE:=headers-more-nginx-module-$(PKG_VERSION)-$$(VERSION).tar.gz
+	URL:=https://github.com/openresty/headers-more-nginx-module.git
+	PROTO:=git
+endef
+
+define  Prepare/nginx-headers-more
+	$(eval $(call Download,nginx-headers-more))
+	gzip -dc $(DL_DIR)/$(FILE) | tar -C $(PKG_BUILD_DIR) $(TAR_OPTIONS)
+endef
+
+define Download/nginx-brotli
+	VERSION:=37ab9b2933a0b756ba3447000b7f31d432ed8228
+	SUBDIR:=nginx-brotli
+	FILE:=ngx-brotli-module-$(PKG_VERSION)-$$(VERSION).tar.gz
+	URL:=https://github.com/eustas/ngx_brotli.git
+	PROTO:=git
+endef
+
+define  Prepare/nginx-brotli
+	$(eval $(call Download,nginx-brotli))
+	gzip -dc $(DL_DIR)/$(FILE) | tar -C $(PKG_BUILD_DIR) $(TAR_OPTIONS)
 endef
 
 define Download/nginx-naxsi
