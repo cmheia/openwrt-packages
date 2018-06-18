@@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=vsftpd
 PKG_VERSION:=3.0.3
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=https://security.appspot.com/downloads/
@@ -43,12 +43,21 @@ $(call Package/vsftpd/Default)
   DEPENDS+=+libopenssl
 endef
 
+define Package/vsftpd-pam
+$(call Package/vsftpd/Default)
+  VARIANT:=pam
+  TITLE+= (PAM)
+  DEPENDS+=+libopenssl +libpam-db +db47-util
+endef
+
 define Package/vsftpd/conffiles
 /etc/vsftpd.conf
 /etc/vsftpd
 endef
 
 Package/vsftpd-tls/conffiles=$(Package/vsftpd/conffiles)
+
+Package/vsftpd-pam/conffiles=$(Package/vsftpd/conffiles)
 
 ifneq ($(CONFIG_USE_MUSL),)
   NLSSTRING:=-lcrypt
@@ -82,6 +91,20 @@ ifeq ($(BUILD_VARIANT),tls)
  endef
 endif
 
+ifeq ($(BUILD_VARIANT),pam)
+ define Build/Compile
+	$(SED) 's/#undef VSF_BUILD_SSL/#define VSF_BUILD_SSL/' $(PKG_BUILD_DIR)/builddefs.h
+	$(SED) 's/#undef VSF_BUILD_PAM/#define VSF_BUILD_PAM/' $(PKG_BUILD_DIR)/builddefs.h
+	$(SED) 's/-lcrypt -lnsl/-lcrypt -lnsl -lssl -lcrypto -lpam/' $(PKG_BUILD_DIR)/Makefile
+	$(SED) 's/-lcrypt -lnsl/$(NLSSTRING)/' $(PKG_BUILD_DIR)/Makefile
+	$(MAKE) -C $(PKG_BUILD_DIR) \
+		CC="$(TARGET_CC)" \
+		CFLAGS="$(TARGET_CFLAGS) $(TARGET_CPPFLAGS)" \
+		LDFLAGS="$(TARGET_LDFLAGS)" \
+		vsftpd
+ endef
+endif
+
 define Package/vsftpd/install
 	$(INSTALL_DIR) $(1)/usr/sbin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/$(PKG_NAME) $(1)/usr/sbin/
@@ -94,5 +117,17 @@ endef
 
 Package/vsftpd-tls/install=$(Package/vsftpd/install)
 
+define Package/vsftpd-pam/install
+	$(INSTALL_DIR) $(1)/usr/sbin
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/$(PKG_NAME) $(1)/usr/sbin/
+	$(INSTALL_DIR) $(1)/etc/config
+	$(INSTALL_CONF) ./files/$(PKG_NAME)-pam.config $(1)/etc/config/$(PKG_NAME)
+	$(INSTALL_DIR) $(1)/etc/init.d
+	$(INSTALL_BIN) ./files/$(PKG_NAME)-pam.init $(1)/etc/init.d/$(PKG_NAME)
+	$(INSTALL_DIR) $(1)/etc/vsftpd
+	$(INSTALL_DIR) $(1)/etc/pam.d
+endef
+
 $(eval $(call BuildPackage,vsftpd))
 $(eval $(call BuildPackage,vsftpd-tls))
+$(eval $(call BuildPackage,vsftpd-pam))
